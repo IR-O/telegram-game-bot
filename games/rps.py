@@ -61,4 +61,18 @@ class RPSGame:
         else:
             return await self.render_game(game, "Choose Rock, Paper, or Scissors!")
 
-    async def render_game(self, game,
+    async def render_game(self, game, message):
+        keyboard = [
+            [
+                InlineKeyboardButton("🪨 Rock", callback_data='rps_0'),
+                InlineKeyboardButton("📄 Paper", callback_data='rps_1'),
+                InlineKeyboardButton("✂️ Scissors", callback_data='rps_2'),
+            ],
+            [InlineKeyboardButton("Back to Menu", callback_data='back')]
+        ]
+        
+        return {
+            'text': f"🪨📄✂️ *ROCK PAPER SCISSORS* ✂️📄🪨\n\n{message}",
+            'reply_markup': InlineKeyboardMarkup(keyboard),
+            'parse_mode': 'Markdown'
+        }
