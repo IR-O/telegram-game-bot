@@ -108,11 +108,15 @@ class HangmanGame:
                         game['guessed'][i] = letter
                 
                 if '_' not in game['guessed']:
-                    return self.render_game(
-                        game,
-                        f"🎉 You won! The word was: {game['word']}",
-                        game_over=True
-                    )
+                    points = (len(game['word']) - len(game['wrong_guesses'])) * 2
+                    return {
+                        **self.render_game(
+                            game,
+                            f"🎉 You won! The word was: {game['word']}",
+                            game_over=True
+                        ),
+                        'points': max(points, 1)
+                    }
                 return self.render_game(game, "Correct! Guess another letter.")
             else:
                 game['wrong_guesses'].append(letter)
