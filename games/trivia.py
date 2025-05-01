@@ -36,7 +36,7 @@ TRIVIA_QUESTIONS = [
 ]
 
 class TriviaGame:
-    def new_game(self):
+    async def new_game(self):
         question = random.choice(TRIVIA_QUESTIONS)
         return {
             'question': question['question'],
@@ -47,13 +47,13 @@ class TriviaGame:
             'message_id': None
         }
 
-    def handle_message(self, update: Update, context: CallbackContext, game):
+    async def handle_message(self, update: Update, context: CallbackContext, game):
         query = update.callback_query
         data = query.data.split('_')[-1] if '_' in query.data else None
 
         if data == 'start':
-            game.update(self.new_game())
-            return self.render_game(game, game['question'])
+            game.update(await self.new_game())
+            return await self.render_game(game, game['question'])
         
         elif data == 'back':
             return None
@@ -61,30 +61,30 @@ class TriviaGame:
         elif data and data.isdigit():
             selected = int(data)
             if game['answered']:
-                query.answer(text="This question has already been answered!", show_alert=True)
+                await query.answer(text="This question has already been answered!", show_alert=True)
                 return None
             
             game['answered'] = True
             if selected == game['correct']:
                 return {
-                    **self.render_game(
+                    **await self.render_game(
                         game,
                         f"✅ Correct! {game['options'][game['correct']]} is the right answer.",
                         answered=True
                     ),
-                    'points': 5  # Points for correct answer
+                    'points': 5
                 }
             else:
-                return self.render_game(
+                return await self.render_game(
                     game,
                     f"❌ Wrong! The correct answer is {game['options'][game['correct']]}.\n"
                     f"You selected {game['options'][selected]}.",
                     answered=True
                 )
         else:
-            return self.render_game(game, game['question'])
+            return await self.render_game(game, game['question'])
 
-    def render_game(self, game, message, answered=False):
+    async def render_game(self, game, message, answered=False):
         keyboard = []
         for i, option in enumerate(game['options']):
             if answered:
