@@ -109,7 +109,7 @@ class GameBot:
                 self.active_games[game_type] = {}
 
             if chat_id not in self.active_games[game_type]:
-                self.active_games[game_type][chat_id] = await self.games[game_type].new_game()
+                self.active_games[game_type][chat_id] = self.games[game_type].new_game()
 
             game = self.active_games[game_type][chat_id]
             response = await self.games[game_type].handle_message(update, context, game)
