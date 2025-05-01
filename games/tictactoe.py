@@ -2,7 +2,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import CallbackContext
 
 class TicTacToeGame:
-    def new_game(self):
+    async def new_game(self):
         return {
             'board': [[' ' for _ in range(3)] for _ in range(3)],
             'players': ['❌', '⭕'],
@@ -15,7 +15,7 @@ class TicTacToeGame:
         data = query.data.split('_')[-1] if '_' in query.data else None
 
         if data == 'start':
-            game.update(self.new_game())
+            game.update(await self.new_game())
             return await self.render_board(game, f"Player {game['players'][game['current_player']]}'s turn")
         
         if data and data.isdigit():
