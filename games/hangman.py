@@ -74,7 +74,7 @@ HANGMAN_STAGES = [
 ]
 
 class HangmanGame:
-    def new_game(self):
+    async def new_game(self):
         word = random.choice(WORDS)
         return {
             'word': word,
@@ -84,13 +84,13 @@ class HangmanGame:
             'message_id': None
         }
 
-    def handle_message(self, update: Update, context: CallbackContext, game):
+    async def handle_message(self, update: Update, context: CallbackContext, game):
         query = update.callback_query
         data = query.data.split('_')[-1] if '_' in query.data else None
 
         if data == 'start':
-            game.update(self.new_game())
-            return self.render_game(game, "Guess a letter to save the hangman!")
+            game.update(await self.new_game())
+            return await self.render_game(game, "Guess a letter to save the hangman!")
         
         elif data == 'back':
             return None
@@ -99,7 +99,7 @@ class HangmanGame:
             letter = data.upper()
             
             if letter in game['wrong_guesses'] or letter in game['guessed']:
-                query.answer(text="You already guessed that letter!", show_alert=True)
+                await query.answer(text="You already guessed that letter!", show_alert=True)
                 return None
             
             if letter in game['word']:
@@ -110,30 +110,29 @@ class HangmanGame:
                 if '_' not in game['guessed']:
                     points = (len(game['word']) - len(game['wrong_guesses'])) * 2
                     return {
-                        **self.render_game(
+                        **await self.render_game(
                             game,
                             f"🎉 You won! The word was: {game['word']}",
                             game_over=True
                         ),
                         'points': max(points, 1)
                     }
-                return self.render_game(game, "Correct! Guess another letter.")
+                return await self.render_game(game, "Correct! Guess another letter.")
             else:
                 game['wrong_guesses'].append(letter)
                 game['stage'] += 1
                 
                 if game['stage'] >= len(HANGMAN_STAGES) - 1:
-                    return self.render_game(
+                    return await self.render_game(
                         game,
                         f"💀 Game Over! The word was: {game['word']}",
                         game_over=True
                     )
-                return self.render_game(game, "Wrong guess! Try again.")
+                return await self.render_game(game, "Wrong guess! Try again.")
         else:
-            return self.render_game(game, "Guess a letter to save the hangman!")
+            return await self.render_game(game, "Guess a letter to save the hangman!")
 
-    def render_game(self, game, message, game_over=False):
-        # Create alphabet keyboard
+    async def render_game(self, game, message, game_over=False):
         keyboard = []
         row = []
         for letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
