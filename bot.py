@@ -12,6 +12,7 @@ from games.hangman import HangmanGame
 from games.memory import MemoryGame
 from games.rps import RPSGame
 from games.math_challenge import MathGame
+from datetime import datetime
 
 # Enable logging
 logging.basicConfig(
@@ -36,7 +37,8 @@ class GameBot:
             'math': MathGame()
         }
         self.active_games = {}
-        self.scores = {}  # For leaderboard functionality
+        self.scores = {}  # Format: {chat_id: {user_id: score}}
+        self.daily_scores = {}  # For daily challenges
 
     def start(self, update: Update, context: CallbackContext) -> None:
         """Send message on `/start`."""
@@ -61,7 +63,8 @@ class GameBot:
                 InlineKeyboardButton("Math Challenge", callback_data='math'),
             ],
             [
-                InlineKeyboardButton("Leaderboard", callback_data='leaderboard')
+                InlineKeyboardButton("🏆 Leaderboard", callback_data='leaderboard'),
+                InlineKeyboardButton("🌟 Daily Challenge", callback_data='daily')
             ]
         ]
 
@@ -69,7 +72,7 @@ class GameBot:
 
         update.message.reply_text(
             f"🎮 *Welcome to Game Boat, {user.first_name}!* 🚢\n\n"
-            "⚡ Choose from 8 exciting games to play:\n\n"
+            "⚡ Choose from 8 exciting games:\n\n"
             "🔴 *Tic Tac Toe* - Classic X and O game\n"
             "🔵 *Guess Number* - Find the secret number\n"
             "🟢 *Word Scramble* - Unscramble the word\n"
@@ -93,9 +96,13 @@ class GameBot:
         
         if query.data == 'leaderboard':
             return self.show_leaderboard(update, context)
+            
+        if query.data == 'daily':
+            return self.show_daily_challenge(update, context)
 
         game_type = query.data
         chat_id = query.message.chat_id
+        user_id = query.from_user.id
 
         if game_type in self.games:
             if game_type not in self.active_games:
@@ -107,7 +114,13 @@ class GameBot:
             game = self.active_games[game_type][chat_id]
             response = self.games[game_type].handle_message(update, context, game)
             
-            if response:
+            # Update scores if game returns points
+            if response and 'points' in response:
+                if chat_id not in self.scores:
+                    self.scores[chat_id] = {}
+                self.scores[chat_id][user_id] = self.scores[chat_id].get(user_id, 0) + response['points']
+            
+            if response and 'text' in response:
                 query.edit_message_text(**response)
         else:
             query.edit_message_text(text="Invalid game selection. Please try again.")
@@ -141,6 +154,38 @@ class GameBot:
             parse_mode='Markdown'
         )
 
+    def show_daily_challenge(self, update: Update, context: CallbackContext) -> None:
+        """Show the daily challenge status."""
+        query = update.callback_query
+        today = datetime.now().date()
+        
+        if today not in self.daily_scores:
+            self.daily_scores[today] = {}
+        
+        if self.daily_scores[today]:
+            sorted_scores = sorted(
+                self.daily_scores[today].items(),
+                key=lambda x: x[1],
+                reverse=True
+            )
+            
+            challenge_text = "🌟 *Daily Challenge* 🌟\n\n"
+            for i, (user_id, score) in enumerate(sorted_scores[:5]):
+                try:
+                    user = context.bot.get_chat_member(query.message.chat_id, user_id).user
+                    challenge_text += f"{i+1}. {user.first_name}: {score} points\n"
+                except:
+                    challenge_text += f"{i+1}. User {user_id}: {score} points\n"
+        else:
+            challenge_text = "No daily challenge scores yet! Be the first to play today."
+        
+        keyboard = [[InlineKeyboardButton("Back to Menu", callback_data='back')]]
+        query.edit_message_text(
+            text=challenge_text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+
     def start_callback(self, update: Update, context: CallbackContext) -> None:
         """Handle the back to start callback."""
         query = update.callback_query
@@ -154,7 +199,8 @@ class GameBot:
             "Available commands:\n"
             "/start - Show the game menu\n"
             "/help - Show this help message\n"
-            "/leaderboard - Show top players\n\n"
+            "/leaderboard - Show top players\n"
+            "/daily - Show daily challenge\n\n"
             "Game Instructions:\n"
             "- Click any game button to start\n"
             "- Each game has its own rules\n"
@@ -167,6 +213,10 @@ class GameBot:
         """Handle the /leaderboard command."""
         self.show_leaderboard(update, context)
 
+    def daily_command(self, update: Update, context: CallbackContext) -> None:
+        """Handle the /daily command."""
+        self.show_daily_challenge(update, context)
+
 def main() -> None:
     """Run the bot."""
     game_bot = GameBot()
@@ -177,6 +227,7 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("start", game_bot.start))
     dispatcher.add_handler(CommandHandler("help", game_bot.help_command))
     dispatcher.add_handler(CommandHandler("leaderboard", game_bot.leaderboard_command))
+    dispatcher.add_handler(CommandHandler("daily", game_bot.daily_command))
     dispatcher.add_handler(CallbackQueryHandler(game_bot.button))
 
     # Start the Bot
