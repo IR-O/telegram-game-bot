@@ -9,7 +9,7 @@ WORDS = [
 ]
 
 class WordScrambleGame:
-    def new_game(self):
+    async def new_game(self):
         word = random.choice(WORDS)
         scrambled = ''.join(random.sample(word, len(word)))
         return {
@@ -20,18 +20,18 @@ class WordScrambleGame:
             'message_id': None
         }
 
-    def handle_message(self, update: Update, context: CallbackContext, game):
+    async def handle_message(self, update: Update, context: CallbackContext, game):
         query = update.callback_query
         data = query.data.split('_')[-1] if '_' in query.data else None
 
         if data == 'start':
-            game.update(self.new_game())
-            return self.render_game(game, f"Unscramble this word: {game['scrambled_word']}")
+            game.update(await self.new_game())
+            return await self.render_game(game, f"Unscramble this word: {game['scrambled_word']}")
         
         elif data == 'hint':
             game['hints_used'] += 1
             hint = game['original_word'][:game['hints_used']] + '_' * (len(game['original_word']) - game['hints_used'])
-            return self.render_game(
+            return await self.render_game(
                 game,
                 f"Unscramble this word: {game['scrambled_word']}\n"
                 f"Hint: {hint} (Hints used: {game['hints_used']})"
@@ -41,7 +41,7 @@ class WordScrambleGame:
             return None
         
         elif data == 'solve':
-            return self.render_game(
+            return await self.render_game(
                 game,
                 f"The word was: {game['original_word']}\n"
                 f"You used {game['hints_used']} hints.",
@@ -51,9 +51,9 @@ class WordScrambleGame:
         elif data and data.isalpha():
             game['attempts'] += 1
             if data.upper() == game['original_word']:
-                points = max(15 - game['hints_used'] * 3, 1)  # Deduct points for hints
+                points = max(15 - game['hints_used'] * 3, 1)
                 return {
-                    **self.render_game(
+                    **await self.render_game(
                         game,
                         f"🎉 Correct! The word was {game['original_word']}!\n"
                         f"You solved it in {game['attempts']} attempts with {game['hints_used']} hints.",
@@ -62,16 +62,16 @@ class WordScrambleGame:
                     'points': points
                 }
             else:
-                return self.render_game(
+                return await self.render_game(
                     game,
                     f"❌ Incorrect! Try again.\n"
                     f"Unscramble this word: {game['scrambled_word']}\n"
                     f"Attempts: {game['attempts']}"
                 )
         else:
-            return self.render_game(game, f"Unscramble this word: {game['scrambled_word']}")
+            return await self.render_game(game, f"Unscramble this word: {game['scrambled_word']}")
 
-    def render_game(self, game, message, game_over=False):
+    async def render_game(self, game, message, game_over=False):
         if game_over:
             keyboard = [
                 [InlineKeyboardButton("Play Again", callback_data='scramble_start')],
