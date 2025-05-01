@@ -10,13 +10,13 @@ class TicTacToeGame:
             'message_id': None
         }
 
-    def handle_message(self, update: Update, context: CallbackContext, game):
+    async def handle_message(self, update: Update, context: CallbackContext, game):
         query = update.callback_query
         data = query.data.split('_')[-1] if '_' in query.data else None
 
         if data == 'start':
             game.update(self.new_game())
-            return self.render_board(game, f"Player {game['players'][game['current_player']]}'s turn")
+            return await self.render_board(game, f"Player {game['players'][game['current_player']]}'s turn")
         
         if data and data.isdigit():
             move = int(data)
@@ -28,22 +28,22 @@ class TicTacToeGame:
                 winner = self.check_winner(game['board'])
                 if winner:
                     return {
-                        **self.render_board(game, f"🎉 Player {winner} wins!"),
-                        'points': 10  # Award points for winning
+                        **await self.render_board(game, f"🎉 Player {winner} wins!"),
+                        'points': 10
                     }
                 
                 if self.is_board_full(game['board']):
-                    return self.render_board(game, "🤝 It's a draw!")
+                    return await self.render_board(game, "🤝 It's a draw!")
                 
                 game['current_player'] = 1 - game['current_player']
-                return self.render_board(game, f"Player {game['players'][game['current_player']]}'s turn")
+                return await self.render_board(game, f"Player {game['players'][game['current_player']]}'s turn")
             else:
-                query.answer(text="That spot is already taken!", show_alert=True)
+                await query.answer(text="That spot is already taken!", show_alert=True)
                 return None
         else:
-            return self.render_board(game, f"Player {game['players'][game['current_player']]}'s turn")
+            return await self.render_board(game, f"Player {game['players'][game['current_player']]}'s turn")
 
-    def render_board(self, game, message):
+    async def render_board(self, game, message):
         keyboard = []
         for i in range(3):
             row = []
