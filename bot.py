@@ -1,8 +1,7 @@
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
-    Updater, CommandHandler, CallbackQueryHandler, CallbackContext,
-    ApplicationBuilder
+    ApplicationBuilder, CommandHandler, CallbackQueryHandler, CallbackContext
 )
 import os
 from games.tictactoe import TicTacToeGame
@@ -17,7 +16,7 @@ from datetime import datetime
 
 # Enable logging
 logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', 
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
@@ -38,8 +37,8 @@ class GameBot:
             'math': MathGame()
         }
         self.active_games = {}
-        self.scores = {}  # Format: {chat_id: {user_id: score}}
-        self.daily_scores = {}  # For daily challenges
+        self.scores = {}
+        self.daily_scores = {}
 
     async def start(self, update: Update, context: CallbackContext) -> None:
         """Send message on `/start`."""
@@ -110,12 +109,11 @@ class GameBot:
                 self.active_games[game_type] = {}
 
             if chat_id not in self.active_games[game_type]:
-                self.active_games[game_type][chat_id] = self.games[game_type].new_game()
+                self.active_games[game_type][chat_id] = await self.games[game_type].new_game()
 
             game = self.active_games[game_type][chat_id]
             response = await self.games[game_type].handle_message(update, context, game)
             
-            # Update scores if game returns points
             if response and 'points' in response:
                 if chat_id not in self.scores:
                     self.scores[chat_id] = {}
@@ -243,8 +241,7 @@ def main() -> None:
         application.run_webhook(
             listen="0.0.0.0",
             port=PORT,
-            url_path=TOKEN,
-            webhook_url=f"https://your-app-name.herokuapp.com/{TOKEN}"
+            webhook_url=os.environ.get('WEBHOOK_URL')
         )
     else:
         application.run_polling()
