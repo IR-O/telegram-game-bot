@@ -1,7 +1,8 @@
 import logging
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
-    Updater, CommandHandler, CallbackQueryHandler, CallbackContext
+    Updater, CommandHandler, CallbackQueryHandler, CallbackContext,
+    ApplicationBuilder
 )
 import os
 from games.tictactoe import TicTacToeGame
@@ -40,7 +41,7 @@ class GameBot:
         self.scores = {}  # Format: {chat_id: {user_id: score}}
         self.daily_scores = {}  # For daily challenges
 
-    def start(self, update: Update, context: CallbackContext) -> None:
+    async def start(self, update: Update, context: CallbackContext) -> None:
         """Send message on `/start`."""
         user = update.message.from_user
         logger.info("User %s started the bot.", user.first_name)
@@ -70,7 +71,7 @@ class GameBot:
 
         reply_markup = InlineKeyboardMarkup(keyboard)
 
-        update.message.reply_text(
+        await update.message.reply_text(
             f"🎮 *Welcome to Game Boat, {user.first_name}!* 🚢\n\n"
             "⚡ Choose from 8 exciting games:\n\n"
             "🔴 *Tic Tac Toe* - Classic X and O game\n"
@@ -86,19 +87,19 @@ class GameBot:
             parse_mode='Markdown'
         )
 
-    def button(self, update: Update, context: CallbackContext) -> None:
+    async def button(self, update: Update, context: CallbackContext) -> None:
         """Handle button presses."""
         query = update.callback_query
-        query.answer()
+        await query.answer()
 
         if query.data == 'back':
-            return self.start_callback(update, context)
+            return await self.start_callback(update, context)
         
         if query.data == 'leaderboard':
-            return self.show_leaderboard(update, context)
+            return await self.show_leaderboard(update, context)
             
         if query.data == 'daily':
-            return self.show_daily_challenge(update, context)
+            return await self.show_daily_challenge(update, context)
 
         game_type = query.data
         chat_id = query.message.chat_id
@@ -112,7 +113,7 @@ class GameBot:
                 self.active_games[game_type][chat_id] = self.games[game_type].new_game()
 
             game = self.active_games[game_type][chat_id]
-            response = self.games[game_type].handle_message(update, context, game)
+            response = await self.games[game_type].handle_message(update, context, game)
             
             # Update scores if game returns points
             if response and 'points' in response:
@@ -121,11 +122,11 @@ class GameBot:
                 self.scores[chat_id][user_id] = self.scores[chat_id].get(user_id, 0) + response['points']
             
             if response and 'text' in response:
-                query.edit_message_text(**response)
+                await query.edit_message_text(**response)
         else:
-            query.edit_message_text(text="Invalid game selection. Please try again.")
+            await query.edit_message_text(text="Invalid game selection. Please try again.")
 
-    def show_leaderboard(self, update: Update, context: CallbackContext) -> None:
+    async def show_leaderboard(self, update: Update, context: CallbackContext) -> None:
         """Display the leaderboard."""
         query = update.callback_query
         chat_id = query.message.chat_id
@@ -140,21 +141,21 @@ class GameBot:
             leaderboard_text = "🏆 *Leaderboard* 🏆\n\n"
             for i, (user_id, score) in enumerate(sorted_scores[:10]):
                 try:
-                    user = context.bot.get_chat_member(chat_id, user_id).user
-                    leaderboard_text += f"{i+1}. {user.first_name}: {score} points\n"
+                    user = await context.bot.get_chat_member(chat_id, user_id)
+                    leaderboard_text += f"{i+1}. {user.user.first_name}: {score} points\n"
                 except:
                     leaderboard_text += f"{i+1}. User {user_id}: {score} points\n"
         else:
             leaderboard_text = "No scores yet! Play some games first."
         
         keyboard = [[InlineKeyboardButton("Back to Menu", callback_data='back')]]
-        query.edit_message_text(
+        await query.edit_message_text(
             text=leaderboard_text,
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode='Markdown'
         )
 
-    def show_daily_challenge(self, update: Update, context: CallbackContext) -> None:
+    async def show_daily_challenge(self, update: Update, context: CallbackContext) -> None:
         """Show the daily challenge status."""
         query = update.callback_query
         today = datetime.now().date()
@@ -172,29 +173,29 @@ class GameBot:
             challenge_text = "🌟 *Daily Challenge* 🌟\n\n"
             for i, (user_id, score) in enumerate(sorted_scores[:5]):
                 try:
-                    user = context.bot.get_chat_member(query.message.chat_id, user_id).user
-                    challenge_text += f"{i+1}. {user.first_name}: {score} points\n"
+                    user = await context.bot.get_chat_member(query.message.chat_id, user_id)
+                    challenge_text += f"{i+1}. {user.user.first_name}: {score} points\n"
                 except:
                     challenge_text += f"{i+1}. User {user_id}: {score} points\n"
         else:
             challenge_text = "No daily challenge scores yet! Be the first to play today."
         
         keyboard = [[InlineKeyboardButton("Back to Menu", callback_data='back')]]
-        query.edit_message_text(
+        await query.edit_message_text(
             text=challenge_text,
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode='Markdown'
         )
 
-    def start_callback(self, update: Update, context: CallbackContext) -> None:
+    async def start_callback(self, update: Update, context: CallbackContext) -> None:
         """Handle the back to start callback."""
         query = update.callback_query
-        self.start(update, context)
-        query.delete_message()
+        await self.start(update, context)
+        await query.delete_message()
 
-    def help_command(self, update: Update, context: CallbackContext) -> None:
+    async def help_command(self, update: Update, context: CallbackContext) -> None:
         """Send a message when the command /help is issued."""
-        update.message.reply_text(
+        await update.message.reply_text(
             "🚀 *Game Boat Help* 🚀\n\n"
             "Available commands:\n"
             "/start - Show the game menu\n"
@@ -209,39 +210,44 @@ class GameBot:
             parse_mode='Markdown'
         )
 
-    def leaderboard_command(self, update: Update, context: CallbackContext) -> None:
+    async def leaderboard_command(self, update: Update, context: CallbackContext) -> None:
         """Handle the /leaderboard command."""
-        self.show_leaderboard(update, context)
+        await self.show_leaderboard(update, context)
 
-    def daily_command(self, update: Update, context: CallbackContext) -> None:
+    async def daily_command(self, update: Update, context: CallbackContext) -> None:
         """Handle the /daily command."""
-        self.show_daily_challenge(update, context)
+        await self.show_daily_challenge(update, context)
+
+async def post_init(application):
+    await application.bot.set_my_commands([
+        ("start", "Start the bot"),
+        ("help", "Show help"),
+        ("leaderboard", "Show leaderboard"),
+        ("daily", "Daily challenge")
+    ])
 
 def main() -> None:
     """Run the bot."""
     game_bot = GameBot()
     
-    updater = Updater(TOKEN)
-    dispatcher = updater.dispatcher
+    application = ApplicationBuilder().token(TOKEN).post_init(post_init).build()
 
-    dispatcher.add_handler(CommandHandler("start", game_bot.start))
-    dispatcher.add_handler(CommandHandler("help", game_bot.help_command))
-    dispatcher.add_handler(CommandHandler("leaderboard", game_bot.leaderboard_command))
-    dispatcher.add_handler(CommandHandler("daily", game_bot.daily_command))
-    dispatcher.add_handler(CallbackQueryHandler(game_bot.button))
+    application.add_handler(CommandHandler("start", game_bot.start))
+    application.add_handler(CommandHandler("help", game_bot.help_command))
+    application.add_handler(CommandHandler("leaderboard", game_bot.leaderboard_command))
+    application.add_handler(CommandHandler("daily", game_bot.daily_command))
+    application.add_handler(CallbackQueryHandler(game_bot.button))
 
     # Start the Bot
     if os.environ.get('ENV') == 'PRODUCTION':
-        updater.start_webhook(
+        application.run_webhook(
             listen="0.0.0.0",
             port=PORT,
             url_path=TOKEN,
             webhook_url=f"https://your-app-name.herokuapp.com/{TOKEN}"
         )
     else:
-        updater.start_polling()
-
-    updater.idle()
+        application.run_polling()
 
 if __name__ == '__main__':
     main()
