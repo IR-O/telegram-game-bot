@@ -1,7 +1,8 @@
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
-    ApplicationBuilder, CommandHandler, CallbackQueryHandler, CallbackContext
+    ApplicationBuilder, CommandHandler, CallbackQueryHandler, 
+    CallbackContext, ContextTypes
 )
 import os
 from games.tictactoe import TicTacToeGame
@@ -43,7 +44,7 @@ class GameBot:
     async def start(self, update: Update, context: CallbackContext) -> None:
         """Send message on `/start`."""
         user = update.message.from_user
-        logger.info("User %s started the bot.", user.first_name)
+        logger.info(f"User {user.first_name} started the bot")
 
         keyboard = [
             [
@@ -91,6 +92,8 @@ class GameBot:
         query = update.callback_query
         await query.answer()
 
+        logger.info(f"Processing callback: {query.data}")
+
         if query.data == 'back':
             return await self.start_callback(update, context)
         
@@ -109,19 +112,30 @@ class GameBot:
                 self.active_games[game_type] = {}
 
             if chat_id not in self.active_games[game_type]:
-                self.active_games[game_type][chat_id] = self.games[game_type].new_game()
+                try:
+                    self.active_games[game_type][chat_id] = self.games[game_type].new_game()
+                    logger.info(f"Initialized new {game_type} game for chat {chat_id}")
+                except Exception as e:
+                    logger.error(f"Failed to initialize game: {e}")
+                    await query.edit_message_text(text="Failed to start game. Please try again.")
+                    return
 
             game = self.active_games[game_type][chat_id]
-            response = await self.games[game_type].handle_message(update, context, game)
-            
-            if response and 'points' in response:
-                if chat_id not in self.scores:
-                    self.scores[chat_id] = {}
-                self.scores[chat_id][user_id] = self.scores[chat_id].get(user_id, 0) + response['points']
-            
-            if response and 'text' in response:
-                await query.edit_message_text(**response)
+            try:
+                response = await self.games[game_type].handle_message(update, context, game)
+                
+                if response and 'points' in response:
+                    if chat_id not in self.scores:
+                        self.scores[chat_id] = {}
+                    self.scores[chat_id][user_id] = self.scores[chat_id].get(user_id, 0) + response['points']
+                
+                if response and 'text' in response:
+                    await query.edit_message_text(**response)
+            except Exception as e:
+                logger.error(f"Error handling game message: {e}")
+                await query.edit_message_text(text="An error occurred. Please try again.")
         else:
+            logger.warning(f"Invalid game selection: {game_type}")
             await query.edit_message_text(text="Invalid game selection. Please try again.")
 
     async def show_leaderboard(self, update: Update, context: CallbackContext) -> None:
@@ -141,7 +155,8 @@ class GameBot:
                 try:
                     user = await context.bot.get_chat_member(chat_id, user_id)
                     leaderboard_text += f"{i+1}. {user.user.first_name}: {score} points\n"
-                except:
+                except Exception as e:
+                    logger.error(f"Error getting user info: {e}")
                     leaderboard_text += f"{i+1}. User {user_id}: {score} points\n"
         else:
             leaderboard_text = "No scores yet! Play some games first."
@@ -173,7 +188,8 @@ class GameBot:
                 try:
                     user = await context.bot.get_chat_member(query.message.chat_id, user_id)
                     challenge_text += f"{i+1}. {user.user.first_name}: {score} points\n"
-                except:
+                except Exception as e:
+                    logger.error(f"Error getting user info: {e}")
                     challenge_text += f"{i+1}. User {user_id}: {score} points\n"
         else:
             challenge_text = "No daily challenge scores yet! Be the first to play today."
@@ -208,13 +224,14 @@ class GameBot:
             parse_mode='Markdown'
         )
 
-    async def leaderboard_command(self, update: Update, context: CallbackContext) -> None:
-        """Handle the /leaderboard command."""
-        await self.show_leaderboard(update, context)
-
-    async def daily_command(self, update: Update, context: CallbackContext) -> None:
-        """Handle the /daily command."""
-        await self.show_daily_challenge(update, context)
+    async def error_handler(self, update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Log errors and send a message to the user."""
+        logger.error(msg="Exception while handling update:", exc_info=context.error)
+        
+        if update and update.callback_query:
+            await update.callback_query.answer("Something went wrong. Please try again.")
+        elif update and update.message:
+            await update.message.reply_text("Something went wrong. Please try again.")
 
 async def post_init(application):
     await application.bot.set_my_commands([
@@ -228,20 +245,25 @@ def main() -> None:
     """Run the bot."""
     game_bot = GameBot()
     
-    application = ApplicationBuilder().token(TOKEN).post_init(post_init).build()
+    application = ApplicationBuilder() \
+        .token(TOKEN) \
+        .post_init(post_init) \
+        .build()
 
     application.add_handler(CommandHandler("start", game_bot.start))
     application.add_handler(CommandHandler("help", game_bot.help_command))
-    application.add_handler(CommandHandler("leaderboard", game_bot.leaderboard_command))
-    application.add_handler(CommandHandler("daily", game_bot.daily_command))
+    application.add_handler(CommandHandler("leaderboard", game_bot.show_leaderboard))
+    application.add_handler(CommandHandler("daily", game_bot.show_daily_challenge))
     application.add_handler(CallbackQueryHandler(game_bot.button))
+    application.add_error_handler(game_bot.error_handler)
 
     # Start the Bot
     if os.environ.get('ENV') == 'PRODUCTION':
         application.run_webhook(
             listen="0.0.0.0",
             port=PORT,
-            webhook_url=os.environ.get('WEBHOOK_URL')
+            webhook_url=os.environ.get('WEBHOOK_URL'),
+            secret_token='YOUR_SECRET_TOKEN'
         )
     else:
         application.run_polling()
